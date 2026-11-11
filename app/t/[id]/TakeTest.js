@@ -17,13 +17,18 @@ export default function TakeTest({ test }) {
   const [err, setErr] = useState(null);
   const startAt = useRef(0);
   const sent = useRef(false);
+  // Refs always hold the latest values, so the timer's auto-submit never sends stale answers.
+  const answersRef = useRef(answers);
+  const nameRef = useRef(name);
+  answersRef.current = answers;
+  nameRef.current = name;
 
   const submit = async () => {
     if (sent.current) return;
     sent.current = true;
     setSubmitting(true);
     const taken = Math.round((Date.now() - startAt.current) / 1000);
-    const r = await submitAttempt(test.id, name, answers, taken);
+    const r = await submitAttempt(test.id, nameRef.current, answersRef.current, taken);
     if (r?.error) { setErr(r.error); setSubmitting(false); sent.current = false; return; }
     router.push(`/t/${test.id}/r/${r.attemptId}`);
   };
