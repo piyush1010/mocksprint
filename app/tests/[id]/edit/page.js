@@ -5,6 +5,7 @@ import { db, normalizeTest } from "@/lib/db";
 import { baseUrl } from "@/lib/url";
 import { maxMarks, fmtTime } from "@/lib/score";
 import Editor from "./Editor";
+import RemoveAttempt from "./RemoveAttempt";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function EditPage({ params }) {
   if (!row) notFound();
   const test = normalizeTest(row);
   const attempts = await sql`
-    select student_name, score, correct, wrong, unanswered, time_taken_sec, created_at
+    select id, student_name, score, correct, wrong, unanswered, time_taken_sec, created_at
     from attempts where test_id = ${id} order by score desc, time_taken_sec asc, created_at asc limit 50`;
   const base = await baseUrl();
 
@@ -50,15 +51,16 @@ export default async function EditPage({ params }) {
             <p className="muted small">No attempts yet. Publish the test and share the student link.</p>
           ) : (
             <table>
-              <thead><tr><th>#</th><th>Student</th><th>Score</th><th>✓ / ✗ / –</th><th>Time</th></tr></thead>
+              <thead><tr><th>#</th><th>Student</th><th>Score</th><th>✓ / ✗ / –</th><th>Time</th><th></th></tr></thead>
               <tbody>
                 {attempts.map((a, i) => (
-                  <tr key={i} className={i === 0 ? "rank1" : ""}>
+                  <tr key={a.id} className={i === 0 ? "rank1" : ""}>
                     <td>{i + 1}</td>
                     <td>{a.student_name}</td>
                     <td>{Number(a.score)}</td>
                     <td>{a.correct} / {a.wrong} / {a.unanswered}</td>
                     <td>{fmtTime(a.time_taken_sec)}</td>
+                    <td style={{ textAlign: "right" }}><RemoveAttempt testId={test.id} attemptId={a.id} name={a.student_name} /></td>
                   </tr>
                 ))}
               </tbody>

@@ -152,3 +152,14 @@ export async function submitAttempt(testId, name, answers, timeTakenSec) {
             values (${id}, ${testId}, ${studentName}, ${sql.json(clean)}, ${score}, ${correct}, ${wrong}, ${unanswered}, ${time})`;
   return { ok: true, attemptId: id };
 }
+
+export async function removeAttempt(testId, attemptId) {
+  try {
+    const { sql } = await ownTest(testId);
+    await sql`delete from attempts where id = ${attemptId} and test_id = ${testId}`;
+    revalidatePath(`/tests/${testId}/edit`);
+    return { ok: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
