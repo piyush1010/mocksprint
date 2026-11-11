@@ -1,13 +1,11 @@
 "use client";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { saveTest, setStatus, deleteTest } from "@/app/actions";
 import CopyButton from "@/app/CopyButton";
 
 const LETTERS = ["A", "B", "C", "D"];
 
 export default function Editor({ initial, studentUrl, attemptCount }) {
-  const router = useRouter();
   const [t, setT] = useState(initial);
   const [status, setSt] = useState(initial.status);
   const [dirty, setDirty] = useState(false);
@@ -22,7 +20,7 @@ export default function Editor({ initial, studentUrl, attemptCount }) {
   const save = () => start(async () => {
     const r = await saveTest(t.id, t);
     if (r?.error) setMsg({ kind: "bad", text: r.error });
-    else { setDirty(false); setSt(r.status); setChecked(false); setMsg({ kind: "ok", text: r.message }); router.refresh(); }
+    else { setDirty(false); setSt(r.status); setChecked(false); setMsg({ kind: "ok", text: r.message }); }
   });
   const move = (next) => start(async () => {
     const r = await setStatus(t.id, next);
@@ -30,7 +28,6 @@ export default function Editor({ initial, studentUrl, attemptCount }) {
     else {
       setSt(r.status); setChecked(false);
       setMsg({ kind: "ok", text: next === "published" ? "Published. Share the student link below." : next === "reviewed" ? "Marked as reviewed. You can publish now." : "Moved back to draft. Students can no longer open it." });
-      router.refresh();
     }
   });
 
