@@ -1,7 +1,6 @@
 import "./globals.css";
 import Link from "next/link";
 import { currentMentor } from "@/lib/auth";
-import { logout } from "./actions";
 
 export const metadata = {
   title: "MockSprint: UPSC mock tests from Claude",
@@ -22,7 +21,7 @@ export default async function RootLayout({ children }) {
                 <>
                   <Link href="/dashboard">Dashboard</Link>
                   <span className="muted small">{mentor.name}</span>
-                  <form action={logout}><button className="btn sm" type="submit">Log out</button></form>
+                  <form method="post" action="/logout"><button className="btn sm" type="submit">Log out</button></form>
                 </>
               ) : (
                 <>
