@@ -1,10 +1,11 @@
 "use client";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { login } from "../actions";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState(login, null);
+  const [email, setEmail] = useState("");
   return (
     <main>
       <div className="wrap" style={{ maxWidth: 440 }}>
@@ -13,7 +14,7 @@ export default function LoginPage() {
           <p className="muted small">Mentor account</p>
           {state?.error && <div className="notice bad">{state.error}</div>}
           <form action={action}>
-            <div className="field"><label>Email</label><input type="email" name="email" required autoComplete="email" /></div>
+            <div className="field"><label>Email</label><input type="email" name="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
             <div className="field"><label>Password</label><input type="password" name="password" required autoComplete="current-password" /></div>
             <button className="btn primary" disabled={pending} style={{ width: "100%" }}>{pending ? "Logging in…" : "Log in"}</button>
           </form>
