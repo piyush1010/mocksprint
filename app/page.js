@@ -1,6 +1,20 @@
 import Link from "next/link";
+import { db } from "@/lib/db";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+async function sampleTestId() {
+  try {
+    const sql = await db();
+    const email = (process.env.DEMO_EMAIL || "demo@mocksprint.in").toLowerCase();
+    const [row] = await sql`select t.id from tests t join mentors m on m.id = t.mentor_id
+      where m.email = ${email} and t.status = 'published' order by t.published_at desc nulls last limit 1`;
+    return row?.id || null;
+  } catch { return null; }
+}
+
+export default async function Home() {
+  const sample = await sampleTestId();
   return (
     <main>
       <div className="wrap">
@@ -13,8 +27,10 @@ export default function Home() {
           </p>
           <div className="row" style={{ marginTop: 18 }}>
             <Link href="/signup" className="btn primary">Get your MCP link (free)</Link>
+            {sample && <Link href={`/t/${sample}`} className="btn">Try a sample test as a student</Link>}
             <Link href="/login" className="btn">Log in</Link>
           </div>
+          <p className="small muted" style={{ marginTop: 10 }}>Reviewing MockSprint? Log in as the demo mentor: <b>demo@mocksprint.in</b> / <b>MockSprint@2026</b></p>
         </section>
 
         <section className="grid3" style={{ marginTop: 30 }}>
@@ -44,7 +60,7 @@ export default function Home() {
             </div>
             <div>
               <h3>MockSprint does what Claude can&rsquo;t</h3>
-              <p className="muted small">Keep the test saved and editable, host it for 500 students at once, run the timer, score with negative marking, rank everyone and keep results after the chat ends.</p>
+              <p className="muted small">Keep the test saved and editable, deliver it to your whole cohort through one link, run the timer, score with negative marking, rank everyone and keep results after the chat ends.</p>
             </div>
           </div>
         </section>
@@ -54,7 +70,7 @@ export default function Home() {
           <p className="muted small">MockSprint has no AI model and no AI keys. You connect your own Claude through MCP, so your Claude plan does the writing and MockSprint stays cheap to run.</p>
         </section>
 
-        <div className="footer">MockSprint · Built by Piyush Kaushik</div>
+        <div className="footer">MockSprint · Built by Piyush Kaushik · Privacy: we store only what a test needs (the mentor&rsquo;s questions, and each student&rsquo;s name, answers and score). Student results are visible to their mentor and on that test&rsquo;s leaderboard.</div>
       </div>
     </main>
   );

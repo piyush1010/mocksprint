@@ -53,7 +53,7 @@ export default function TakeTest({ test }) {
             <div className="stat"><b>{test.duration_minutes} min</b><span className="small muted">time limit</span></div>
             <div className="stat"><b>+{test.marks_correct} / −{test.marks_wrong}</b><span className="small muted">marking</span></div>
           </div>
-          <p className="small muted">Wrong answers lose {test.marks_wrong} marks, so leave a question blank if you&rsquo;re unsure. The test submits automatically when time runs out.</p>
+          <p className="small muted">Wrong answers lose {test.marks_wrong} marks, so leave a question blank if you&rsquo;re unsure. The test submits automatically when time runs out. Your name and score are shown to your mentor and on this test&rsquo;s leaderboard.</p>
           <div className="field"><label>Your name (shown on the leaderboard)</label><input type="text" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ananya S." /></div>
           <button className="btn primary" disabled={!name.trim()} onClick={() => { startAt.current = Date.now(); setStarted(true); }} style={{ width: "100%" }}>Start test</button>
         </div>
