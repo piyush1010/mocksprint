@@ -112,7 +112,29 @@ export async function POST(req, ctx) {
   return handle(req, ctx);
 }
 
-export async function GET() {
+export async function GET(req, { params }) {
+  const accept = req.headers.get("accept") || "";
+  if (accept.includes("text/html")) {
+    const { key } = await params;
+    const sql = await db();
+    const [mentor] = await sql`select id from mentors where mcp_key = ${key}`;
+    const url = `${baseUrlFromRequest(req)}/api/mcp/${key}`;
+    const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const body = mentor
+      ? `<h1>This is a MockSprint MCP link ✅</h1><p>It works, but it's meant for <b>Claude</b>, not your browser.</p>
+         <h2>Connect it to Claude</h2><ol>
+         <li>In Claude, open <b>Settings → Connectors → Add custom connector</b>.</li>
+         <li>Name it <b>MockSprint</b> and paste this link:<pre>${esc(url)}</pre>Keep <b>No sign-in</b> selected and click <b>Add</b>.</li>
+         <li>In a new chat, switch MockSprint on in the tools menu and ask: <i>"Create a 5-question UPSC Prelims Polity mock test on Fundamental Rights in MockSprint."</i></li></ol>
+         <p><a href="/login">Open MockSprint</a> to review and publish the tests Claude creates.</p>`
+      : `<h1>This MockSprint link isn't valid</h1><p>Copy your personal MCP link from the <a href="/dashboard">MockSprint dashboard</a>.</p>`;
+    return new Response(
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MockSprint MCP link</title>
+      <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;color:#141a2e;line-height:1.55;background:#f6f7fb}
+      h1{font-size:24px}h2{font-size:17px;margin-top:24px}pre{background:#fff;border:1px solid #e3e6ef;border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;font-size:13px}a{color:#3b46d6}li{margin-bottom:8px}</style></head><body>${body}</body></html>`,
+      { status: mentor ? 200 : 404, headers: { "content-type": "text/html; charset=utf-8" } }
+    );
+  }
   return Response.json(
     { jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed. Use POST (MCP Streamable HTTP)." }, id: null },
     { status: 405, headers: { Allow: "POST" } }
