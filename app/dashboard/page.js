@@ -40,7 +40,7 @@ export default async function Dashboard() {
           <ol className="steps small">
             <li>In Claude (claude.ai or the desktop app), open <b>Settings → Connectors</b>.</li>
             <li>Click <b>Add custom connector</b>, name it <b>MockSprint</b>, paste the link above, and click <b>Add</b>.</li>
-            <li>In a new chat, turn on MockSprint from the tools menu and ask: <i>&ldquo;Create a 10-question UPSC Polity mock test on Fundamental Rights in MockSprint.&rdquo;</i></li>
+            <li>In a new chat, turn on MockSprint from the tools menu and ask: <i>&ldquo;Create a 5-question UPSC Prelims Polity mock test on Fundamental Rights in MockSprint.&rdquo;</i></li>
           </ol>
         </div>
 
