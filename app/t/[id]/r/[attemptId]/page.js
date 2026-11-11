@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db, normalizeTest } from "@/lib/db";
 import { maxMarks, fmtTime } from "@/lib/score";
+import MadeWith from "@/app/MadeWith";
 
 export const dynamic = "force-dynamic";
 const LETTERS = ["A", "B", "C", "D"];
@@ -64,6 +65,7 @@ export default async function ResultPage({ params }) {
             </div>
           );
         })}
+        <MadeWith />
       </div>
     </main>
   );

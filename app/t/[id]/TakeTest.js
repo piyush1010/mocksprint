@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { submitAttempt } from "@/app/actions";
+import MadeWith from "@/app/MadeWith";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -57,6 +58,7 @@ export default function TakeTest({ test }) {
           <div className="field"><label>Your name (shown on the leaderboard)</label><input type="text" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ananya S." /></div>
           <button className="btn primary" disabled={!name.trim()} onClick={() => { startAt.current = Date.now(); setStarted(true); }} style={{ width: "100%" }}>Start test</button>
         </div>
+        <MadeWith />
       </div></main>
     );
   }
