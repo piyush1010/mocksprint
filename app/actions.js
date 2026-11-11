@@ -132,25 +132,39 @@ export async function deleteTest(id) {
 }
 
 // ---------- Students ----------
-export async function submitAttempt(testId, name, answers, timeTakenSec) {
+export async function submitAttempt(testId, name, answers, timeTakenSec, clientAttemptId) {
+  const started = Date.now();
   const studentName = String(name || "").trim().slice(0, 60);
   if (!studentName) return { error: "Please enter your name." };
-  const sql = await db();
-  const [row] = await sql`select * from tests where id = ${testId} and status = 'published'`;
-  if (!row) return { error: "This test is not available right now." };
-  const test = normalizeTest(row);
-  const clean = test.questions.map((_, i) => {
-    const a = answers?.[i];
-    return a === null || a === undefined || a === "" ? null : Math.max(0, Math.min(3, Number(a)));
-  });
-  const { correct, wrong, unanswered, score } = scoreAttempt(test, clean);
-  const limit = test.duration_minutes * 60;
-  const taken = Number(timeTakenSec);
-  const time = Number.isFinite(taken) ? Math.max(1, Math.min(limit, Math.round(taken))) : limit;
-  const id = newId(10);
-  await sql`insert into attempts (id, test_id, student_name, answers, score, correct, wrong, unanswered, time_taken_sec)
-            values (${id}, ${testId}, ${studentName}, ${sql.json(clean)}, ${score}, ${correct}, ${wrong}, ${unanswered}, ${time})`;
-  return { ok: true, attemptId: id };
+  // The browser creates the attempt ID once, so a retry after a lost response can't create a duplicate.
+  const id = /^[a-z0-9]{10,32}$/.test(String(clientAttemptId || "")) ? String(clientAttemptId) : newId(12);
+  try {
+    const sql = await db();
+    const [existing] = await sql`select id from attempts where id = ${id} and test_id = ${testId}`;
+    if (existing) {
+      console.log(`[submit] duplicate request for attempt ${id}, returning existing result`);
+      return { ok: true, attemptId: id };
+    }
+    const [row] = await sql`select * from tests where id = ${testId} and status = 'published'`;
+    if (!row) return { error: "This test is not available right now." };
+    const test = normalizeTest(row);
+    const clean = test.questions.map((_, i) => {
+      const a = answers?.[i];
+      return a === null || a === undefined || a === "" ? null : Math.max(0, Math.min(3, Number(a)));
+    });
+    const { correct, wrong, unanswered, score } = scoreAttempt(test, clean);
+    const limit = test.duration_minutes * 60;
+    const taken = Number(timeTakenSec);
+    const time = Number.isFinite(taken) ? Math.max(1, Math.min(limit, Math.round(taken))) : limit;
+    await sql`insert into attempts (id, test_id, student_name, answers, score, correct, wrong, unanswered, time_taken_sec)
+              values (${id}, ${testId}, ${studentName}, ${sql.json(clean)}, ${score}, ${correct}, ${wrong}, ${unanswered}, ${time})
+              on conflict (id) do nothing`;
+    console.log(`[submit] saved attempt ${id} for test ${testId}: score ${score} in ${Date.now() - started}ms`);
+    return { ok: true, attemptId: id };
+  } catch (e) {
+    console.error(`[submit] failed for test ${testId} attempt ${id} after ${Date.now() - started}ms:`, e.message);
+    return { error: "We couldn't save your answers just now. Your answers are still here. Please tap Try again." };
+  }
 }
 
 export async function removeAttempt(testId, attemptId) {

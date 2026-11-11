@@ -18,6 +18,9 @@ export default function TakeTest({ test }) {
   const startAt = useRef(0);
   const sent = useRef(false);
   // Refs always hold the latest values, so the timer's auto-submit never sends stale answers.
+  const attemptId = useRef(
+    Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("")
+  );
   const answersRef = useRef(answers);
   const nameRef = useRef(name);
   answersRef.current = answers;
@@ -27,8 +30,17 @@ export default function TakeTest({ test }) {
     if (sent.current) return;
     sent.current = true;
     setSubmitting(true);
+    setErr(null);
     const taken = Math.round((Date.now() - startAt.current) / 1000);
-    const r = await submitAttempt(test.id, nameRef.current, answersRef.current, taken);
+    let r;
+    try {
+      r = await Promise.race([
+        submitAttempt(test.id, nameRef.current, answersRef.current, taken, attemptId.current),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20000)),
+      ]);
+    } catch {
+      r = { error: "Submitting is taking too long. Check your internet, then tap Try again. Your answers are still here." };
+    }
     if (r?.error) { setErr(r.error); setSubmitting(false); sent.current = false; return; }
     router.push(`/t/${test.id}/r/${r.attemptId}`);
   };
@@ -92,7 +104,7 @@ export default function TakeTest({ test }) {
         {err && <div className="notice bad">{err}</div>}
         <div className="sticky-bar"><div className="row between">
           <span className="small muted">{test.questions.length - answered} unanswered</span>
-          <button className="btn primary" disabled={submitting} onClick={() => { if (confirm("Submit your test now?")) submit(); }}>{submitting ? "Submitting…" : "Submit test"}</button>
+          <button className="btn primary" disabled={submitting} onClick={() => { if (err || confirm("Submit your test now?")) submit(); }}>{submitting ? "Submitting…" : err ? "Try again" : "Submit test"}</button>
         </div></div>
       </div></main>
     </>
