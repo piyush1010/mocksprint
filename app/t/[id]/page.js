@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { db, normalizeTest } from "@/lib/db";
+import { examLabel } from "@/lib/exams";
+import { qType, totalMinutes } from "@/lib/score";
 import TakeTest from "./TakeTest";
 
 export const dynamic = "force-dynamic";
@@ -30,10 +32,20 @@ export default async function TestPage({ params }) {
     title: test.title,
     topic: test.topic,
     mentor: row.mentor_name,
-    duration_minutes: test.duration_minutes,
+    exam: test.exam === "custom" ? null : examLabel(test.exam),
+    duration_minutes: totalMinutes(test),
     marks_correct: test.marks_correct,
     marks_wrong: test.marks_wrong,
-    questions: test.questions.map((q) => ({ question: q.question, options: q.options })),
+    marks_blank: test.marks_blank,
+    not_attempted_option: test.not_attempted_option,
+    qualifying_percent: test.qualifying_percent,
+    sections: test.sections,
+    questions: test.questions.map((q) => ({
+      type: qType(q),
+      question: q.question,
+      options: qType(q) === "tita" ? [] : q.options,
+      section: Number.isInteger(q.section) ? q.section : null,
+    })),
   };
   return <TakeTest test={safe} />;
 }

@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { saveTest, setStatus, deleteTest } from "@/app/actions";
 import CopyButton from "@/app/CopyButton";
+import { EXAMS, EXAM_KEYS } from "@/lib/exams";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -17,10 +18,27 @@ export default function Editor({ initial, studentUrl, attemptCount }) {
   const updateQ = (i, patch) => update({ questions: t.questions.map((q, j) => (j === i ? { ...q, ...patch } : q)) });
   const updateOpt = (i, k, v) => updateQ(i, { options: t.questions[i].options.map((o, j) => (j === k ? v : o)) });
 
+  const applyExam = (key) => {
+    const p = EXAMS[key];
+    const sections = p.sections.map((x) => ({ ...x }));
+    update({
+      exam: key, marks_correct: p.marks_correct, marks_wrong: p.marks_wrong, marks_blank: p.marks_blank,
+      not_attempted_option: p.not_attempted_option, qualifying_percent: p.qualifying_percent ?? "", sections,
+      questions: t.questions.map((q) => ({ ...q, section: sections.length ? Math.min(Number.isInteger(q.section) ? q.section : 0, sections.length - 1) : null })),
+    });
+  };
+  const setSections = (sections) => update({
+    sections,
+    questions: t.questions.map((q) => ({ ...q, section: sections.length ? Math.min(Number.isInteger(q.section) ? q.section : 0, sections.length - 1) : null })),
+  });
+  const preset = EXAMS[t.exam] || EXAMS.custom;
+  const hasSections = t.sections.length > 0;
+  const totalMin = hasSections ? t.sections.reduce((a, x) => a + Number(x.minutes || 0), 0) : t.duration_minutes;
+
   const save = () => start(async () => {
     const r = await saveTest(t.id, t);
     if (r?.error) setMsg({ kind: "bad", text: r.error });
-    else { setDirty(false); setSt(r.status); setChecked(false); setMsg({ kind: "ok", text: r.message }); }
+    else { if (r.questions) setT((x) => ({ ...x, questions: r.questions })); setDirty(false); setSt(r.status); setChecked(false); setMsg({ kind: "ok", text: r.message }); }
   });
   const move = (next) => start(async () => {
     const r = await setStatus(t.id, next);
@@ -66,29 +84,76 @@ export default function Editor({ initial, studentUrl, attemptCount }) {
 
         <div className="field"><label>Title</label><input type="text" value={t.title} onChange={(e) => update({ title: e.target.value })} /></div>
         <div className="grid2">
-          <div className="field"><label>Subject / topic</label><input type="text" value={t.topic} onChange={(e) => update({ topic: e.target.value })} /></div>
-          <div className="grid3" style={{ gap: 10 }}>
-            <div className="field"><label>Minutes</label><input type="number" min="1" max="180" value={t.duration_minutes} onChange={(e) => update({ duration_minutes: e.target.value })} /></div>
-            <div className="field"><label>+ Correct</label><input type="number" step="0.01" value={t.marks_correct} onChange={(e) => update({ marks_correct: e.target.value })} /></div>
-            <div className="field"><label>− Wrong</label><input type="number" step="0.01" value={t.marks_wrong} onChange={(e) => update({ marks_wrong: e.target.value })} /></div>
+          <div className="field"><label>Exam</label>
+            <select value={t.exam} onChange={(e) => applyExam(e.target.value)}>
+              {EXAM_KEYS.map((k) => <option key={k} value={k}>{EXAMS[k].label}</option>)}
+            </select>
           </div>
+          <div className="field"><label>Subject / topic</label><input type="text" value={t.topic} onChange={(e) => update({ topic: e.target.value })} /></div>
+        </div>
+        <div className="small muted" style={{ marginTop: -4, marginBottom: 10 }}>{preset.note} Changing the exam resets marking to its preset; check it against the latest official notification.</div>
+        <div className="grid3" style={{ gap: 10 }}>
+          <div className="field"><label>Minutes{hasSections ? " (total)" : ""}</label><input type="number" min="1" max="240" value={totalMin} disabled={hasSections} onChange={(e) => update({ duration_minutes: e.target.value })} /></div>
+          <div className="field"><label>+ Correct</label><input type="number" step="0.01" value={t.marks_correct} onChange={(e) => update({ marks_correct: e.target.value })} /></div>
+          <div className="field"><label>− Wrong</label><input type="number" step="0.01" value={t.marks_wrong} onChange={(e) => update({ marks_wrong: e.target.value })} /></div>
+          <div className="field"><label>− Left blank</label><input type="number" step="0.01" min="0" value={t.marks_blank} onChange={(e) => update({ marks_blank: e.target.value })} /></div>
+          <div className="field"><label>Qualifying % (optional)</label><input type="number" min="0" max="100" value={t.qualifying_percent ?? ""} onChange={(e) => update({ qualifying_percent: e.target.value })} /></div>
+          <div className="field"><label>Option E</label>
+            <label className="row small" style={{ margin: "8px 0 0", fontWeight: 500 }}>
+              <input type="checkbox" checked={!!t.not_attempted_option} onChange={(e) => update({ not_attempted_option: e.target.checked })} /> Show &ldquo;E: Not attempted&rdquo;
+            </label>
+          </div>
+        </div>
+
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>Timed sections {hasSections ? "(locked in order: students can't go back)" : "(none: one timer for the whole test)"}</label>
+          {t.sections.map((sct, i) => (
+            <div className="row" key={i} style={{ marginBottom: 6 }}>
+              <input type="text" value={sct.name} placeholder="Section name" style={{ flex: 2 }} onChange={(e) => setSections(t.sections.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+              <input type="number" min="1" max="120" value={sct.minutes} style={{ flex: 1 }} onChange={(e) => setSections(t.sections.map((x, j) => (j === i ? { ...x, minutes: e.target.value } : x)))} />
+              <span className="small muted">min</span>
+              <button className="btn sm danger" onClick={() => setSections(t.sections.filter((_, j) => j !== i))}>Remove</button>
+            </div>
+          ))}
+          <button className="btn sm" onClick={() => setSections([...t.sections, { name: `Section ${t.sections.length + 1}`, minutes: 20 }])}>+ Add section</button>
         </div>
       </div>
 
       {t.questions.map((q, i) => (
         <div className="q" key={i}>
           <div className="row between" style={{ marginBottom: 6 }}>
-            <b>Question {i + 1}</b>
+            <b>Question {i + 1}{hasSections && t.sections[q.section] ? ` · ${t.sections[q.section].name}` : ""}</b>
             <button className="btn sm danger" onClick={() => update({ questions: t.questions.filter((_, j) => j !== i) })} disabled={t.questions.length <= 1}>Remove</button>
           </div>
+          <div className="row" style={{ marginBottom: 8 }}>
+            <select value={q.type === "tita" ? "tita" : "mcq"} style={{ width: "auto" }} onChange={(e) => updateQ(i, e.target.value === "tita" ? { type: "tita", answer: q.answer || "" } : { type: "mcq", options: q.options?.length === 4 ? q.options : ["", "", "", ""], correct: Number.isInteger(q.correct) ? q.correct : 0 })}>
+              <option value="mcq">Multiple choice (4 options)</option>
+              <option value="tita">Type the answer (TITA)</option>
+            </select>
+            {hasSections && (
+              <select value={Number.isInteger(q.section) ? q.section : 0} style={{ width: "auto" }} onChange={(e) => updateQ(i, { section: Number(e.target.value) })}>
+                {t.sections.map((sct, k) => <option key={k} value={k}>{sct.name || `Section ${k + 1}`}</option>)}
+              </select>
+            )}
+          </div>
           <textarea value={q.question} onChange={(e) => updateQ(i, { question: e.target.value })} placeholder="Question text" />
-          <div className="small muted" style={{ marginTop: 8 }}>Options: click a letter to set the correct answer</div>
-          {q.options.map((o, k) => (
-            <div className="optrow" key={k}>
-              <div className={`letter ${q.correct === k ? "correct" : ""}`} title="Mark as correct answer" onClick={() => updateQ(i, { correct: k })}>{LETTERS[k]}</div>
-              <input type="text" value={o} onChange={(e) => updateOpt(i, k, e.target.value)} placeholder={`Option ${LETTERS[k]}`} />
+          {q.type === "tita" ? (
+            <div className="field" style={{ marginTop: 8 }}>
+              <label>Correct answer (students type this; numbers match ignoring commas and spaces)</label>
+              <input type="text" value={q.answer || ""} onChange={(e) => updateQ(i, { answer: e.target.value })} placeholder="e.g. 42" />
+              {Number(t.marks_wrong) > 0 && <div className="small muted" style={{ marginTop: 4 }}>Wrong typed answers get 0, not negative marks.</div>}
             </div>
-          ))}
+          ) : (
+            <>
+              <div className="small muted" style={{ marginTop: 8 }}>Options: click a letter to set the correct answer</div>
+              {(q.options || ["", "", "", ""]).map((o, k) => (
+                <div className="optrow" key={k}>
+                  <div className={`letter ${q.correct === k ? "correct" : ""}`} title="Mark as correct answer" onClick={() => updateQ(i, { correct: k })}>{LETTERS[k]}</div>
+                  <input type="text" value={o} onChange={(e) => updateOpt(i, k, e.target.value)} placeholder={`Option ${LETTERS[k]}`} />
+                </div>
+              ))}
+            </>
+          )}
           <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
             <label>Explanation (shown to students after they submit)</label>
             <textarea value={q.explanation} onChange={(e) => updateQ(i, { explanation: e.target.value })} style={{ minHeight: 44 }} />
@@ -96,7 +161,7 @@ export default function Editor({ initial, studentUrl, attemptCount }) {
         </div>
       ))}
 
-      <button className="btn" onClick={() => update({ questions: [...t.questions, { question: "", options: ["", "", "", ""], correct: 0, explanation: "" }] })}>+ Add question</button>
+      <button className="btn" onClick={() => update({ questions: [...t.questions, { type: "mcq", question: "", options: ["", "", "", ""], correct: 0, explanation: "", section: hasSections ? t.sections.length - 1 : null }] })}>+ Add question</button>
 
       <div className="sticky-bar">
         <div className="row between">

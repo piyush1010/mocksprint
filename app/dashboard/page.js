@@ -1,3 +1,4 @@
+import { examLabel } from "@/lib/exams";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentMentor } from "@/lib/auth";
@@ -13,7 +14,7 @@ export default async function Dashboard() {
   if (!mentor) redirect("/login");
   const sql = await db();
   const tests = await sql`
-    select t.id, t.title, t.topic, t.status, t.source, t.created_at, jsonb_array_length(t.questions) as qcount,
+    select t.id, t.title, t.topic, t.exam, t.status, t.source, t.created_at, jsonb_array_length(t.questions) as qcount,
            (select count(*) from attempts a where a.test_id = t.id)::int as attempts
     from tests t where t.mentor_id = ${mentor.id} order by t.created_at desc`;
   const base = await baseUrl();
@@ -55,7 +56,7 @@ export default async function Dashboard() {
                   <tr key={t.id}>
                     <td>
                       <Link href={`/tests/${t.id}/edit`}><b>{t.title}</b></Link>
-                      <div className="small muted">{t.topic}{t.source === "claude" ? " · from Claude" : ""} · {new Date(t.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })}</div>
+                      <div className="small muted">{t.exam && t.exam !== "custom" ? `${examLabel(t.exam)} · ` : ""}{t.topic}{t.source === "claude" ? " · from Claude" : ""} · {new Date(t.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })}</div>
                     </td>
                     <td><span className={`badge ${t.status}`}>{t.status}</span></td>
                     <td>{t.qcount}</td>

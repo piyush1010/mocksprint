@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db, newId, normalizeTest } from "@/lib/db";
 import { setSession, clearSession, currentMentor } from "@/lib/auth";
-import { scoreAttempt } from "@/lib/score";
+import { scoreAttempt, qType, totalMinutes } from "@/lib/score";
+import { EXAM_KEYS } from "@/lib/exams";
 
 // ---------- Accounts ----------
 export async function login(_prev, formData) {
@@ -56,26 +57,57 @@ function cleanTest(data) {
   const errors = [];
   const title = String(data.title || "").trim();
   if (title.length < 3) errors.push("Title is too short.");
-  const duration = Math.round(Number(data.duration_minutes));
-  if (!(duration >= 1 && duration <= 180)) errors.push("Duration must be 1 to 180 minutes.");
+  const exam = EXAM_KEYS.includes(data.exam) ? data.exam : "custom";
   const mc = Number(data.marks_correct);
   const mw = Number(data.marks_wrong);
+  const mb = Number(data.marks_blank || 0);
   if (!(mc > 0 && mc <= 10)) errors.push("Marks for a correct answer must be between 0 and 10.");
   if (!(mw >= 0 && mw <= 10)) errors.push("Negative marks must be between 0 and 10.");
+  if (!(mb >= 0 && mb <= 10)) errors.push("Blank penalty must be between 0 and 10.");
+  const qp = data.qualifying_percent === "" || data.qualifying_percent === null || data.qualifying_percent === undefined ? null : Number(data.qualifying_percent);
+  if (qp !== null && !(qp > 0 && qp <= 100)) errors.push("Qualifying % must be between 1 and 100, or empty.");
+  const sections = (Array.isArray(data.sections) ? data.sections : []).map((sct, i) => {
+    const name = String(sct.name || "").trim();
+    const minutes = Math.round(Number(sct.minutes));
+    if (!name) errors.push(`Section ${i + 1} needs a name.`);
+    if (!(minutes >= 1 && minutes <= 120)) errors.push(`Section ${i + 1} needs 1 to 120 minutes.`);
+    return { name, minutes };
+  });
+  const duration = sections.length ? sections.reduce((t, x) => t + (x.minutes || 0), 0) : Math.round(Number(data.duration_minutes));
+  if (!(duration >= 1 && duration <= 240)) errors.push("Duration must be 1 to 240 minutes.");
   const questions = (Array.isArray(data.questions) ? data.questions : []).map((q, i) => {
+    const type = q.type === "tita" ? "tita" : "mcq";
     const question = String(q.question || "").trim();
+    const explanation = String(q.explanation || "").trim();
+    let section = null;
+    if (sections.length) {
+      section = Number(q.section);
+      if (!(Number.isInteger(section) && section >= 0 && section < sections.length)) errors.push(`Question ${i + 1} needs a section.`);
+    }
+    if (!question) errors.push(`Question ${i + 1} has no text.`);
+    if (type === "tita") {
+      const answer = String(q.answer || "").trim();
+      if (!answer) errors.push(`Question ${i + 1} needs the typed answer.`);
+      return { type, question, options: [], correct: null, answer, explanation, section };
+    }
     const options = (q.options || []).slice(0, 4).map((o) => String(o || "").trim());
     while (options.length < 4) options.push("");
     const correct = Number(q.correct);
-    if (!question) errors.push(`Question ${i + 1} has no text.`);
     if (options.some((o) => !o)) errors.push(`Question ${i + 1} needs all four options.`);
     if (!(correct >= 0 && correct <= 3)) errors.push(`Question ${i + 1} needs a correct answer.`);
-    return { question, options, correct, explanation: String(q.explanation || "").trim() };
+    return { type, question, options, correct, explanation, section };
   });
   if (questions.length === 0) errors.push("Add at least one question.");
+  if (sections.length) {
+    sections.forEach((sct, i) => { if (!questions.some((q) => q.section === i)) errors.push(`Section "${sct.name}" has no questions.`); });
+    questions.sort((x, y) => x.section - y.section);
+  }
   return {
     errors,
-    value: { title, topic: String(data.topic || "").trim(), duration_minutes: duration, marks_correct: mc, marks_wrong: mw, questions },
+    value: {
+      title, topic: String(data.topic || "").trim(), exam, duration_minutes: duration, marks_correct: mc, marks_wrong: mw,
+      marks_blank: mb, not_attempted_option: !!data.not_attempted_option, qualifying_percent: qp, sections, questions,
+    },
   };
 }
 
@@ -86,11 +118,13 @@ export async function saveTest(id, data) {
     if (errors.length) return { error: errors.slice(0, 4).join(" ") };
     // Editing a reviewed test sends it back to draft so it gets checked again.
     const status = test.status === "reviewed" ? "draft" : test.status;
-    await sql`update tests set title = ${value.title}, topic = ${value.topic}, duration_minutes = ${value.duration_minutes},
-              marks_correct = ${value.marks_correct}, marks_wrong = ${value.marks_wrong}, questions = ${sql.json(value.questions)},
+    await sql`update tests set title = ${value.title}, topic = ${value.topic}, exam = ${value.exam}, duration_minutes = ${value.duration_minutes},
+              marks_correct = ${value.marks_correct}, marks_wrong = ${value.marks_wrong}, marks_blank = ${value.marks_blank},
+              not_attempted_option = ${value.not_attempted_option}, qualifying_percent = ${value.qualifying_percent},
+              sections = ${sql.json(value.sections)}, questions = ${sql.json(value.questions)},
               status = ${status}, updated_at = now() where id = ${id}`;
     revalidatePath(`/tests/${id}/edit`);
-    return { ok: true, status, message: test.status === "reviewed" ? "Saved. Edits moved the test back to Draft, so review it again." : "Saved." };
+    return { ok: true, status, questions: value.questions, message: test.status === "reviewed" ? "Saved. Edits moved the test back to Draft, so review it again." : "Saved." };
   } catch (e) {
     return { error: e.message };
   }
@@ -148,12 +182,16 @@ export async function submitAttempt(testId, name, answers, timeTakenSec, clientA
     const [row] = await sql`select * from tests where id = ${testId} and status = 'published'`;
     if (!row) return { error: "This test is not available right now." };
     const test = normalizeTest(row);
-    const clean = test.questions.map((_, i) => {
+    const clean = test.questions.map((q, i) => {
       const a = answers?.[i];
-      return a === null || a === undefined || a === "" ? null : Math.max(0, Math.min(3, Number(a)));
+      if (a === null || a === undefined || a === "") return null;
+      if (qType(q) === "tita") return String(a).slice(0, 60);
+      if (a === "E") return test.not_attempted_option ? "E" : null;
+      const n = Number(a);
+      return Number.isInteger(n) && n >= 0 && n <= 3 ? n : null;
     });
     const { correct, wrong, unanswered, score } = scoreAttempt(test, clean);
-    const limit = test.duration_minutes * 60;
+    const limit = totalMinutes(test) * 60;
     const taken = Number(timeTakenSec);
     const time = Number.isFinite(taken) ? Math.max(1, Math.min(limit, Math.round(taken))) : limit;
     await sql`insert into attempts (id, test_id, student_name, answers, score, correct, wrong, unanswered, time_taken_sec)

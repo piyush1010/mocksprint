@@ -19,11 +19,11 @@ export default async function Home() {
     <main>
       <div className="wrap">
         <section className="hero">
-          <p className="badge reviewed" style={{ marginBottom: 12 }}>For independent UPSC mentors</p>
+          <p className="badge reviewed" style={{ marginBottom: 12 }}>For mentors: UPSC, UPPCS, BPSC, JKPSC and CAT</p>
           <h1>Ask Claude for a mock test. Share a timed, auto-scored test link in two minutes.</h1>
           <p className="muted" style={{ fontSize: 17, maxWidth: 720 }}>
             Claude writes the questions. MockSprint makes them operational: you review and edit every question,
-            publish a student link, and MockSprint runs the timer, applies UPSC negative marking and ranks your students.
+            publish a student link, and MockSprint runs the timer, applies the exam’s negative marking (and CAT’s timed sections) and ranks your students.
           </p>
           <div className="row" style={{ marginTop: 18 }}>
             <Link href="/signup" className="btn primary">Get your MCP link (free)</Link>
